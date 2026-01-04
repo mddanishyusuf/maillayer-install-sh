@@ -5,9 +5,11 @@
 # https://maillayer.com
 #
 # Usage:
-#   curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- --license YOUR-LICENSE-KEY
+#   curl -fsSL https://get.maillayer.com/install.sh | sudo bash
 #
-# With options:
+# The installer will prompt for your license key and domain.
+#
+# Or with options (non-interactive):
 #   curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- \
 #     --license XXXX-XXXX-XXXX-XXXX \
 #     --domain mail.example.com
@@ -22,7 +24,8 @@ set -e
 MAILLAYER_VERSION="${MAILLAYER_VERSION:-latest}"
 INSTALL_DIR="/opt/maillayer"
 LICENSE_API="https://maillayer.com/api/license"
-GITHUB_REPO="maillayer/maillayer"
+# Public repo where releases are hosted (not source code)
+GITHUB_REPO="mddanishyusuf/maillayer-releases"
 DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download"
 NODE_VERSION="20"
 
@@ -169,15 +172,19 @@ check_root() {
     fi
 }
 
-check_license_provided() {
+prompt_license() {
     if [[ -z "$LICENSE_KEY" ]]; then
-        log_error "License key is required"
         echo ""
-        echo "Usage:"
-        echo "  curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- --license YOUR-LICENSE-KEY"
+        echo -e "${BOLD}License Key${NC}"
+        echo "Enter your Maillayer license key."
+        echo "Don't have one? Purchase at: https://maillayer.com/pricing"
         echo ""
-        echo "Don't have a license? Purchase at: https://maillayer.com/pricing"
-        exit 1
+        read -p "License Key (XXXX-XXXX-XXXX-XXXX): " LICENSE_KEY
+
+        if [[ -z "$LICENSE_KEY" ]]; then
+            log_error "License key is required"
+            exit 1
+        fi
     fi
 }
 
@@ -766,18 +773,18 @@ parse_args() {
             -h|--help)
                 echo "Maillayer Installer"
                 echo ""
-                echo "Usage: install.sh --license YOUR-LICENSE-KEY [options]"
+                echo "Usage: curl -fsSL https://get.maillayer.com/install.sh | sudo bash"
                 echo ""
-                echo "Required:"
+                echo "The installer will prompt for your license key and domain."
+                echo ""
+                echo "Options (for non-interactive install):"
                 echo "  --license <key>      Your Maillayer license key"
-                echo ""
-                echo "Options:"
                 echo "  --domain <domain>    Domain name for Maillayer"
                 echo "  --no-ssl             Skip SSL setup"
                 echo "  --version <version>  Maillayer version (default: latest)"
                 echo "  -h, --help           Show this help message"
                 echo ""
-                echo "Example:"
+                echo "Example (non-interactive):"
                 echo "  curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- \\"
                 echo "    --license XXXX-XXXX-XXXX-XXXX \\"
                 echo "    --domain mail.example.com"
@@ -805,13 +812,13 @@ main() {
 
     log_step 1 "Checking requirements"
     check_root
-    check_license_provided
     check_os
     check_memory
     check_ports
     log_success "System requirements met"
 
     log_step 2 "Verifying license"
+    prompt_license
     verify_license
 
     prompt_domain
