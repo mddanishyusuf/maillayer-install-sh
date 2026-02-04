@@ -7,11 +7,8 @@
 # Usage:
 #   curl -fsSL https://get.maillayer.com/install.sh | sudo bash
 #
-# The installer will prompt for your license key and domain.
-#
-# Or with options (non-interactive):
+# Optional:
 #   curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- \
-#     --license XXXX-XXXX-XXXX-XXXX \
 #     --domain mail.example.com
 #
 
@@ -23,7 +20,6 @@ set -e
 
 MAILLAYER_VERSION="${MAILLAYER_VERSION:-latest}"
 INSTALL_DIR="/opt/maillayer"
-LICENSE_API="https://maillayer.com/api/license"
 # Public repo where releases are hosted (not source code)
 GITHUB_REPO="mddanishyusuf/maillayer-releases"
 DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download"
@@ -85,81 +81,6 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# ============================================================================
-# License Verification
-# ============================================================================
-
-verify_license() {
-    log_info "Verifying license key..."
-
-    # Get server info
-    local server_ip=$(curl -s ifconfig.me 2>/dev/null || echo "unknown")
-    local hostname=$(hostname)
-
-    # Call license API
-    local response=$(curl -s -X POST "${LICENSE_API}/verify" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"license_key\": \"${LICENSE_KEY}\",
-            \"domain\": \"${DOMAIN:-$hostname}\",
-            \"ip\": \"${server_ip}\",
-            \"action\": \"install\"
-        }" 2>&1)
-
-    # Check if curl failed
-    if [[ $? -ne 0 ]]; then
-        log_error "Failed to connect to license server"
-        log_error "Please check your internet connection and try again"
-        exit 1
-    fi
-
-    # Parse response
-    local valid=$(echo "$response" | grep -o '"valid":\s*true' || echo "")
-    local error=$(echo "$response" | grep -o '"error":"[^"]*"' | cut -d'"' -f4 || echo "")
-    local message=$(echo "$response" | grep -o '"message":"[^"]*"' | cut -d'"' -f4 || echo "")
-
-    if [[ -z "$valid" ]]; then
-        log_error "License verification failed"
-        if [[ -n "$message" ]]; then
-            log_error "$message"
-        fi
-        if [[ -n "$error" ]]; then
-            case "$error" in
-                "invalid_license")
-                    echo -e "\n${YELLOW}Your license key was not found.${NC}"
-                    echo "Please check your key and try again."
-                    echo "Purchase a license at: https://maillayer.com/pricing"
-                    ;;
-                "license_already_used")
-                    echo -e "\n${YELLOW}This license is already activated on another server.${NC}"
-                    echo "Each license can only be used on one server."
-                    echo "To move your license, deactivate it first at: https://maillayer.com/account"
-                    ;;
-                "license_expired")
-                    echo -e "\n${YELLOW}Your license has expired.${NC}"
-                    echo "Renew your license at: https://maillayer.com/account"
-                    ;;
-                "license_suspended")
-                    echo -e "\n${YELLOW}Your license has been suspended.${NC}"
-                    echo "Please contact support: support@maillayer.com"
-                    ;;
-                *)
-                    echo -e "\nError: $error"
-                    ;;
-            esac
-        fi
-        exit 1
-    fi
-
-    # Extract info from response
-    LICENSED_EMAIL=$(echo "$response" | grep -o '"email":"[^"]*"' | cut -d'"' -f4 || echo "")
-    DOWNLOAD_TOKEN=$(echo "$response" | grep -o '"download_token":"[^"]*"' | cut -d'"' -f4 || echo "")
-
-    log_success "License verified successfully"
-    if [[ -n "$LICENSED_EMAIL" ]]; then
-        log_info "Licensed to: $LICENSED_EMAIL"
-    fi
-}
 
 # ============================================================================
 # System Checks
@@ -172,21 +93,6 @@ check_root() {
     fi
 }
 
-prompt_license() {
-    if [[ -z "$LICENSE_KEY" ]]; then
-        echo ""
-        echo -e "${BOLD}License Key${NC}"
-        echo "Enter your Maillayer license key."
-        echo "Don't have one? Purchase at: https://maillayer.com/pricing"
-        echo ""
-        read -p "License Key (XXXX-XXXX-XXXX-XXXX): " LICENSE_KEY
-
-        if [[ -z "$LICENSE_KEY" ]]; then
-            log_error "License key is required"
-            exit 1
-        fi
-    fi
-}
 
 check_os() {
     if [[ -f /etc/os-release ]]; then
@@ -418,9 +324,6 @@ create_env_file() {
 NODE_ENV=production
 BASE_URL=${BASE_URL}
 
-# License
-LICENSE_KEY=${LICENSE_KEY}
-
 # Database
 MONGODB_URI=mongodb://127.0.0.1:27017/maillayer
 REDIS_URL=redis://127.0.0.1:6379
@@ -538,22 +441,8 @@ case "$1" in
         fi
         ;;
     update)
-        echo "Checking license..."
-        source $INSTALL_DIR/.env
-
-        # Verify license before update
-        response=$(curl -s -X POST "https://maillayer.com/api/license/verify" \
-            -H "Content-Type: application/json" \
-            -d "{\"license_key\": \"$LICENSE_KEY\", \"domain\": \"$(hostname)\", \"action\": \"update\"}")
-
-        valid=$(echo "$response" | grep -o '"valid":\s*true' || echo "")
-        if [[ -z "$valid" ]]; then
-            echo "License verification failed. Please check your license."
-            exit 1
-        fi
-
         echo "Fetching latest version..."
-        LATEST=$(curl -s "https://api.github.com/repos/maillayer/maillayer/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)
+        LATEST=$(curl -s "https://api.github.com/repos/mddanishyusuf/maillayer-releases/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)
 
         if [[ -z "$LATEST" ]]; then
             echo "Failed to fetch latest version."
@@ -569,7 +458,7 @@ case "$1" in
         cp -r $INSTALL_DIR $INSTALL_DIR.backup.$(date +%Y%m%d%H%M%S)
 
         # Download and extract new version
-        curl -fsSL "https://github.com/maillayer/maillayer/releases/download/$LATEST/maillayer.tar.gz" | \
+        curl -fsSL "https://github.com/mddanishyusuf/maillayer-releases/releases/download/$LATEST/maillayer.tar.gz" | \
             tar -xz -C $INSTALL_DIR --strip-components=1
 
         # Reinstall dependencies
@@ -642,23 +531,11 @@ case "$1" in
         rm -rf "$TEMP_DIR"
         echo "Restore complete!"
         ;;
-    license)
+    info)
         source $INSTALL_DIR/.env
-        echo "License Key: ${LICENSE_KEY:0:4}****${LICENSE_KEY: -4}"
         echo "Version: ${MAILLAYER_VERSION}"
         echo "Base URL: ${BASE_URL}"
-
-        # Check license status
-        response=$(curl -s -X POST "https://maillayer.com/api/license/check" \
-            -H "Content-Type: application/json" \
-            -d "{\"license_key\": \"$LICENSE_KEY\", \"domain\": \"$(hostname)\"}")
-
-        echo ""
-        if echo "$response" | grep -q '"valid":\s*true'; then
-            echo "Status: Active ✓"
-        else
-            echo "Status: Invalid ✗"
-        fi
+        echo "Install Dir: $INSTALL_DIR"
         ;;
     uninstall)
         echo "This will remove Maillayer."
@@ -707,7 +584,7 @@ case "$1" in
         echo "  update     Update to latest version"
         echo "  backup     Create a backup"
         echo "  restore    Restore from a backup"
-        echo "  license    Show license information"
+        echo "  info       Show installation info"
         echo "  config     Edit configuration"
         echo "  uninstall  Remove Maillayer"
         echo ""
@@ -732,10 +609,12 @@ create_directories() {
 
 prompt_domain() {
     if [[ -z "$DOMAIN" ]]; then
+        # Get server IP
+        SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP")
+
         echo ""
         echo -e "${BOLD}Domain Configuration${NC}"
         echo "Enter the domain where Maillayer will be accessible."
-        echo "Make sure DNS A record points to this server's IP."
         echo ""
         read -p "Domain (e.g., mail.yourdomain.com): " DOMAIN
 
@@ -743,6 +622,21 @@ prompt_domain() {
             log_warning "No domain provided. Using localhost (SSL disabled)"
             DOMAIN="localhost"
             SKIP_SSL="true"
+        else
+            echo ""
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${YELLOW}  DNS Configuration Required${NC}"
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            echo "  Add this DNS record to your domain provider:"
+            echo ""
+            echo -e "  ${BOLD}Type:${NC}  A"
+            echo -e "  ${BOLD}Name:${NC}  ${DOMAIN}"
+            echo -e "  ${BOLD}Value:${NC} ${SERVER_IP}"
+            echo ""
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            read -p "Press Enter once DNS is configured (or Ctrl+C to cancel)..."
         fi
     fi
 }
@@ -754,10 +648,6 @@ prompt_domain() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --license)
-                LICENSE_KEY="$2"
-                shift 2
-                ;;
             --domain)
                 DOMAIN="$2"
                 shift 2
@@ -775,18 +665,14 @@ parse_args() {
                 echo ""
                 echo "Usage: curl -fsSL https://get.maillayer.com/install.sh | sudo bash"
                 echo ""
-                echo "The installer will prompt for your license key and domain."
-                echo ""
-                echo "Options (for non-interactive install):"
-                echo "  --license <key>      Your Maillayer license key"
+                echo "Options:"
                 echo "  --domain <domain>    Domain name for Maillayer"
                 echo "  --no-ssl             Skip SSL setup"
                 echo "  --version <version>  Maillayer version (default: latest)"
                 echo "  -h, --help           Show this help message"
                 echo ""
-                echo "Example (non-interactive):"
+                echo "Example:"
                 echo "  curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- \\"
-                echo "    --license XXXX-XXXX-XXXX-XXXX \\"
                 echo "    --domain mail.example.com"
                 echo ""
                 exit 0
@@ -804,7 +690,7 @@ parse_args() {
 # ============================================================================
 
 main() {
-    TOTAL_STEPS=10
+    TOTAL_STEPS=9
 
     print_banner
 
@@ -817,41 +703,37 @@ main() {
     check_ports
     log_success "System requirements met"
 
-    log_step 2 "Verifying license"
-    prompt_license
-    verify_license
-
     prompt_domain
 
-    log_step 3 "Installing system dependencies"
+    log_step 2 "Installing system dependencies"
     install_dependencies
 
-    log_step 4 "Installing Node.js"
+    log_step 3 "Installing Node.js"
     install_nodejs
 
-    log_step 5 "Installing databases"
+    log_step 4 "Installing databases"
     install_mongodb
     install_redis
 
-    log_step 6 "Installing PM2 and Caddy"
+    log_step 5 "Installing PM2 and Caddy"
     install_pm2
     install_caddy
 
-    log_step 7 "Downloading Maillayer"
+    log_step 6 "Downloading Maillayer"
     get_latest_version
     create_directories
     download_maillayer
     install_npm_dependencies
 
-    log_step 8 "Configuring Maillayer"
+    log_step 7 "Configuring Maillayer"
     create_env_file
     create_caddyfile
 
-    log_step 9 "Starting services"
+    log_step 8 "Starting services"
     setup_pm2
     start_services
 
-    log_step 10 "Finalizing"
+    log_step 9 "Finalizing"
     create_cli
 
     # Success message
@@ -868,7 +750,6 @@ main() {
     fi
 
     echo ""
-    echo -e "  ${BOLD}License:${NC} ${LICENSE_KEY:0:4}****${LICENSE_KEY: -4}"
     echo -e "  ${BOLD}Version:${NC} ${MAILLAYER_VERSION}"
     echo ""
     echo -e "  ${BOLD}Useful commands:${NC}"
@@ -877,15 +758,21 @@ main() {
     echo "    maillayer restart   - Restart services"
     echo "    maillayer backup    - Create a backup"
     echo "    maillayer update    - Update to latest version"
-    echo "    maillayer license   - Check license status"
+    echo "    maillayer info      - Show installation info"
     echo ""
     echo -e "  ${BOLD}Configuration:${NC} $INSTALL_DIR/.env"
     echo ""
 
     if [[ "$SKIP_SSL" != "true" && "$DOMAIN" != "localhost" ]]; then
         log_info "SSL certificate will be automatically provisioned by Caddy"
+        echo ""
+        echo -e "  ${YELLOW}If site is not loading, verify DNS:${NC}"
+        echo "    dig +short ${DOMAIN}"
+        echo ""
+        echo "  DNS can take up to 24-48 hours to propagate."
     fi
 
+    echo ""
     log_success "Installation complete! Create your admin account at your domain."
 }
 
