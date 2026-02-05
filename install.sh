@@ -309,6 +309,8 @@ create_env_file() {
 
     NEXTAUTH_SECRET=$(generate_secret)
     TRACKING_SECRET=$(generate_secret)
+    ENCRYPTION_KEY=$(generate_secret)
+    JWT_SECRET=$(generate_secret)
 
     if [[ "$SKIP_SSL" == "true" || "$DOMAIN" == "localhost" ]]; then
         BASE_URL="http://${DOMAIN:-localhost}"
@@ -331,6 +333,8 @@ REDIS_URL=redis://127.0.0.1:6379
 # Security Secrets (auto-generated, do not share)
 NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
 TRACKING_SECRET=${TRACKING_SECRET}
+ENCRYPTION_KEY=${ENCRYPTION_KEY}
+JWT_SECRET=${JWT_SECRET}
 
 # Version
 MAILLAYER_VERSION=${MAILLAYER_VERSION}
