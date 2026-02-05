@@ -7,9 +7,7 @@
 # Usage:
 #   curl -fsSL https://get.maillayer.com/install.sh | sudo bash
 #
-# Optional:
-#   curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- \
-#     --domain mail.example.com
+# Domain and SSL are configured via the app dashboard after installation.
 #
 
 set -e
@@ -611,38 +609,10 @@ create_directories() {
 # Interactive Setup
 # ============================================================================
 
-prompt_domain() {
-    if [[ -z "$DOMAIN" ]]; then
-        # Get server IP
-        SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP")
-
-        echo ""
-        echo -e "${BOLD}Domain Configuration${NC}"
-        echo "Enter the domain where Maillayer will be accessible."
-        echo ""
-        read -p "Domain (e.g., mail.yourdomain.com): " DOMAIN
-
-        if [[ -z "$DOMAIN" ]]; then
-            log_warning "No domain provided. Using localhost (SSL disabled)"
-            DOMAIN="localhost"
-            SKIP_SSL="true"
-        else
-            echo ""
-            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-            echo -e "${YELLOW}  DNS Configuration Required${NC}"
-            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-            echo ""
-            echo "  Add this DNS record to your domain provider:"
-            echo ""
-            echo -e "  ${BOLD}Type:${NC}  A"
-            echo -e "  ${BOLD}Name:${NC}  ${DOMAIN}"
-            echo -e "  ${BOLD}Value:${NC} ${SERVER_IP}"
-            echo ""
-            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-            echo ""
-            read -p "Press Enter once DNS is configured (or Ctrl+C to cancel)..."
-        fi
-    fi
+setup_domain() {
+    # Default to localhost - domain configured via app dashboard
+    DOMAIN="localhost"
+    SKIP_SSL="true"
 }
 
 # ============================================================================
@@ -652,14 +622,6 @@ prompt_domain() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --domain)
-                DOMAIN="$2"
-                shift 2
-                ;;
-            --no-ssl)
-                SKIP_SSL="true"
-                shift
-                ;;
             --version)
                 MAILLAYER_VERSION="$2"
                 shift 2
@@ -670,14 +632,10 @@ parse_args() {
                 echo "Usage: curl -fsSL https://get.maillayer.com/install.sh | sudo bash"
                 echo ""
                 echo "Options:"
-                echo "  --domain <domain>    Domain name for Maillayer"
-                echo "  --no-ssl             Skip SSL setup"
                 echo "  --version <version>  Maillayer version (default: latest)"
                 echo "  -h, --help           Show this help message"
                 echo ""
-                echo "Example:"
-                echo "  curl -fsSL https://get.maillayer.com/install.sh | sudo bash -s -- \\"
-                echo "    --domain mail.example.com"
+                echo "Domain and SSL are configured via the app dashboard after installation."
                 echo ""
                 exit 0
                 ;;
@@ -707,7 +665,7 @@ main() {
     check_ports
     log_success "System requirements met"
 
-    prompt_domain
+    setup_domain
 
     log_step 2 "Installing system dependencies"
     install_dependencies
@@ -747,11 +705,8 @@ main() {
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    if [[ "$SKIP_SSL" == "true" || "$DOMAIN" == "localhost" ]]; then
-        echo -e "  ${BOLD}Access Maillayer at:${NC} http://${DOMAIN}"
-    else
-        echo -e "  ${BOLD}Access Maillayer at:${NC} https://${DOMAIN}"
-    fi
+    SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP")
+    echo -e "  ${BOLD}Access Maillayer at:${NC} http://${SERVER_IP}"
 
     echo ""
     echo -e "  ${BOLD}Version:${NC} ${MAILLAYER_VERSION}"
@@ -766,18 +721,12 @@ main() {
     echo ""
     echo -e "  ${BOLD}Configuration:${NC} $INSTALL_DIR/.env"
     echo ""
-
-    if [[ "$SKIP_SSL" != "true" && "$DOMAIN" != "localhost" ]]; then
-        log_info "SSL certificate will be automatically provisioned by Caddy"
-        echo ""
-        echo -e "  ${YELLOW}If site is not loading, verify DNS:${NC}"
-        echo "    dig +short ${DOMAIN}"
-        echo ""
-        echo "  DNS can take up to 24-48 hours to propagate."
-    fi
-
+    echo -e "  ${BOLD}Next steps:${NC}"
+    echo "    1. Open http://localhost or http://YOUR_SERVER_IP"
+    echo "    2. Create your admin account"
+    echo "    3. Configure your domain via the app dashboard"
     echo ""
-    log_success "Installation complete! Create your admin account at your domain."
+    log_success "Installation complete!"
 }
 
 main "$@"
