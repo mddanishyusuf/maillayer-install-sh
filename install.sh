@@ -722,7 +722,7 @@ main() {
     echo -e "  ${BOLD}Configuration:${NC} $INSTALL_DIR/.env"
     echo ""
     echo -e "  ${BOLD}Next steps:${NC}"
-    echo "    1. Open http://localhost or http://YOUR_SERVER_IP"
+    echo "    1. Open http://${SERVER_IP}"
     echo "    2. Create your admin account"
     echo "    3. Configure your domain via the app dashboard"
     echo ""
